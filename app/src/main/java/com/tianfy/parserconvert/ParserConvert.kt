@@ -7,6 +7,7 @@ import java.lang.reflect.ParameterizedType
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.experimental.and
+import kotlin.reflect.jvm.internal.impl.load.kotlin.JvmType
 
 /**
  * @author tianfy
@@ -35,16 +36,16 @@ class ParserConvert private constructor() {
      * @param parserBean 要解析的对象
      * @return 字节数组
      */
-    fun <T> parserBean2Bytes(parserBean: Any): ByteArray {
+    fun parserBean2Bytes(parserBean: Any): ByteArray {
         // 先计算要转换bytes的长度
         val clazz = parserBean::class.java
         try {
             val byteSize = calculateSize(clazz)
-            Log.d(TAG, "parserBean2Bytes byteSize:$byteSize")
+//            Log.d(TAG, "parserBean2Bytes byteSize:$byteSize")
             // 计算完长度后，创建ByteBuffer，然后填充数据
-            val byteBuffer = convertBytes(byteSize, clazz)
+            val byteBuffer = convertBytes(byteSize, clazz, parserBean)
             val bytes = byteBuffer.array()
-            Log.d(TAG, "parserBean2Bytes convertBytesHex:${ConvertUtils.bytes2HexString(bytes)}")
+//            Log.d(TAG, "parserBean2Bytes convertBytesHex:${ConvertUtils.bytes2HexString(bytes)}")
             return bytes
         } catch (e: Exception) {
             throw RuntimeException(e)
@@ -53,67 +54,71 @@ class ParserConvert private constructor() {
 
     private fun convertBytes(
         byteSize: Int,
-        calzz: Class<*>
+        clazz: Class<*>,
+        parserBean: Any
     ): ByteBuffer {
         val byteBuffer = ByteBuffer.allocate(byteSize).order(ByteOrder.BIG_ENDIAN)
-        calzz.declaredFields.forEach {
+        clazz.declaredFields.forEach {
+            it.isAccessible = true
             when (it.type) {
                 Byte::class.javaPrimitiveType -> {
                     // 一个字节
-                    byteBuffer.put(it.getByte(calzz))
+                    byteBuffer.put(it.getByte(parserBean))
                 }
 
                 Short::class.javaPrimitiveType -> {
                     // 两个字节
-                    byteBuffer.putShort(it.getShort(calzz))
+                    byteBuffer.putShort(it.getShort(parserBean))
                 }
 
                 Int::class.javaPrimitiveType -> {
                     // 四个字节
-                    byteBuffer.putInt(it.getInt(calzz))
+                    byteBuffer.putInt(it.getInt(parserBean))
                 }
 
                 Long::class.javaPrimitiveType -> {
                     // 八个字节
-                    byteBuffer.putLong(it.getLong(calzz))
+                    byteBuffer.putLong(it.getLong(parserBean))
                 }
 
                 Double::class.javaPrimitiveType -> {
                     // 八个字节
-                    byteBuffer.putDouble(it.getDouble(calzz))
+                    byteBuffer.putDouble(it.getDouble(parserBean))
                 }
 
                 ArrayList::class.java -> {
                     it.isAccessible = true
                     val listClazz = it.type as Class<*>
-                    val field = listClazz.getField("size")
-                    field.isAccessible = true
-                    val size = field.get(listClazz) as Int
+                    val size = arrayListCheck(listClazz, it)
+                    val list = it.get(parserBean) as List<*>
+                    val genericType = it.genericType
+                    val parameterizedType = genericType as ParameterizedType
+                    val type = parameterizedType.actualTypeArguments[0]
                     for (i in 0 until size) {
-                        when (it.genericType as Class<*>) {
-                            Byte::class.javaPrimitiveType -> {
+                        when (type as Class<*>) {
+                            Byte::class.javaObjectType -> {
                                 // 一个字节
-                                byteBuffer.put(it.getByte(listClazz))
+                                byteBuffer.put(list[i] as Byte)
                             }
 
-                            Short::class.javaPrimitiveType -> {
+                            Short::class.javaObjectType -> {
                                 // 两个字节
-                                byteBuffer.putShort(it.getShort(listClazz))
+                                byteBuffer.putShort(list[i] as Short)
                             }
 
-                            Int::class.javaPrimitiveType -> {
+                            Int::class.javaObjectType -> {
                                 // 四个字节
-                                byteBuffer.putInt(it.getInt(listClazz))
+                                byteBuffer.putInt(list[i] as Int)
                             }
 
-                            Long::class.javaPrimitiveType -> {
+                            Long::class.javaObjectType -> {
                                 // 八个字节
-                                byteBuffer.putLong(it.getLong(listClazz))
+                                byteBuffer.putLong(list[i] as Long)
                             }
 
-                            Double::class.javaPrimitiveType -> {
+                            Double::class.javaObjectType -> {
                                 // 八个字节
-                                byteBuffer.putDouble(it.getDouble(listClazz))
+                                byteBuffer.putDouble(list[i] as Double)
                             }
 
                             else -> {
@@ -161,35 +166,37 @@ class ParserConvert private constructor() {
                 ArrayList::class.java -> {
                     it.isAccessible = true
                     val listClazz = it.type as Class<*>
-                    val field = listClazz.getField("size")
-                    field.isAccessible = true
-                    val size = field.get(listClazz) as Int
+                    val size = arrayListCheck(listClazz, it)
+                    val genericType = it.genericType
+                    val parameterizedType = genericType as ParameterizedType
+                    val type = parameterizedType.actualTypeArguments[0]
                     for (i in 0 until size) {
-                        when (it.genericType as Class<*>) {
-                            Byte::class.javaPrimitiveType -> {
+                        when (type as Class<*>) {
+                            Byte::class.javaObjectType -> {
                                 // 一个字节
                                 byteSize += 1
                             }
 
-                            Short::class.javaPrimitiveType -> {
+                            Short::class.javaObjectType -> {
                                 // 两个字节
                                 byteSize += 2
                             }
 
-                            Int::class.javaPrimitiveType -> {
+                            Int::class.javaObjectType -> {
                                 // 四个字节
                                 byteSize += 4
                             }
 
-                            Long::class.javaPrimitiveType -> {
+                            Long::class.javaObjectType -> {
                                 // 八个字节
                                 byteSize += 8
                             }
 
-                            Double::class.javaPrimitiveType -> {
+                            Double::class.javaObjectType -> {
                                 // 八个字节
                                 byteSize += 8
                             }
+
                             else -> {
                                 throw IllegalArgumentException("${genericTypeClazz.simpleName}:${it.type.simpleName} 不支持的类型")
                             }
@@ -231,6 +238,20 @@ class ParserConvert private constructor() {
         }
     }
 
+    fun <T> parseBytes2Bean(
+        bytes: ByteArray,
+        clazz: Class<T>
+    ): T? {
+        val byteBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
+        var parserObject: T? = null
+        try {
+            parserObject = parserObject(clazz, byteBuffer) as T
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return parserObject
+    }
+
     private fun parserObject(
         clazz: Class<*>,
         byteBuffer: ByteBuffer,
@@ -269,57 +290,79 @@ class ParserConvert private constructor() {
                 }
 
                 ArrayList::class.java -> {
-                    parserList(it, byteBuffer)
+                    parserList(parserBean,it, byteBuffer)
                 }
 
                 else -> {
                     throw IllegalArgumentException("${clazz.simpleName}:${it.type.simpleName} 不支持的类型")
                 }
             }
+
         }
         return parserBean
     }
 
-    private fun parserList(it: Field, byteBuffer: ByteBuffer) {
+    private fun parserList(parserBean: Any, it: Field, byteBuffer: ByteBuffer) {
         it.isAccessible = true
         val listClazz = it.type as Class<*>
-        val field = listClazz.getField("size")
-        field.isAccessible = true
-        val size = field.get(listClazz) as Int
-        it.genericType.let { type ->
-            for (i in 0 until size) {
-                when (type) {
-                    Byte::class.javaPrimitiveType -> {
-                        listClazz.getMethod("add", Byte::class.javaPrimitiveType)
-                            .invoke(listClazz, byteBuffer.get() and 0xff.toByte())
-                    }
+        val size = arrayListCheck(listClazz, it)
+        val genericType = it.genericType
+        val parameterizedType = genericType as ParameterizedType
+        val type = parameterizedType.actualTypeArguments[0]
+        val constructor = listClazz.getConstructor(Int::class.java)
+        val newInstance = constructor.newInstance(size) as ArrayList<*>
+        val newListClazz = newInstance::class.java
+        for (i in 0 until size) {
+            when (type) {
+                Byte::class.javaObjectType -> {
+                    val addMethod = newListClazz.getMethod("add", Any::class.java)
+                    addMethod.isAccessible = true
+                    addMethod.invoke(newInstance, byteBuffer.get() and 0xff.toByte())
+                }
 
-                    Short::class.javaPrimitiveType -> {
-                        listClazz.getMethod("add", Short::class.javaPrimitiveType)
-                            .invoke(listClazz, byteBuffer.short)
-                    }
+                Short::class.javaObjectType -> {
+                    val addMethod = newListClazz.getDeclaredMethod("add", Any::class.java)
+                    addMethod.isAccessible = true
+                    addMethod.invoke(newInstance, byteBuffer.short)
+                }
 
-                    Int::class.javaPrimitiveType -> {
-                        listClazz.getMethod("add", Int::class.javaPrimitiveType)
-                            .invoke(listClazz, byteBuffer.int)
-                    }
+                Int::class.javaObjectType -> {
+                    val addMethod = newListClazz.getDeclaredMethod("add", Any::class.java)
+                    addMethod.isAccessible = true
+                    addMethod.invoke(newInstance, byteBuffer.int)
+                }
 
-                    Long::class.javaPrimitiveType -> {
-                        listClazz.getMethod("add", Long::class.javaPrimitiveType)
-                            .invoke(listClazz, byteBuffer.long)
-                    }
+                Long::class.javaObjectType -> {
+                    val addMethod = newListClazz.getDeclaredMethod("add", Any::class.java)
+                    addMethod.isAccessible = true
+                    addMethod.invoke(newInstance, byteBuffer.long)
+                }
 
-                    Double::class.javaPrimitiveType -> {
-                        listClazz.getMethod("add", Double::class.javaPrimitiveType)
-                            .invoke(listClazz, byteBuffer.double)
-                    }
+                Double::class.javaObjectType -> {
+                    val addMethod = newListClazz.getDeclaredMethod("add", Any::class.java)
+                    addMethod.isAccessible = true
+                    addMethod.invoke(newInstance, byteBuffer.double)
+                }
 
-                    else -> {
-                        throw IllegalArgumentException("${listClazz.simpleName}:${it.type.simpleName} 不支持的类型")
-                    }
+                else -> {
+                    throw IllegalArgumentException("${listClazz.simpleName}:${it.type.simpleName} 不支持的类型")
                 }
             }
         }
+        it.set(parserBean,newInstance)
+    }
+
+    private fun arrayListCheck(listClazz: Class<*>, it: Field): Int {
+        if (listClazz != ArrayList::class.java) {
+            throw ClassNotFoundException("${it.name} type must be ArrayList")
+        }
+        val annotation = it.getAnnotation(ConvertArray::class.java)
+            ?: throw NullPointerException("${it.name} must add ConvertArray annotation")
+        val size = annotation.size
+        if (size == 0) {
+            throw NullPointerException("${it.name} ConvertArray annotation size can not is 0")
+        }
+        return size
     }
 }
 
