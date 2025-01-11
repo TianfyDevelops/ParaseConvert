@@ -1,4 +1,4 @@
-package com.tianfy.parserconvert;
+package com.tianfy.convertlibrary.anno;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

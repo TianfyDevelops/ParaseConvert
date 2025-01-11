@@ -1,15 +1,19 @@
-package com.tianfy.parserconvert
+package com.tianfy.convertlibrary.core
 
 import android.util.Log
+import com.blankj.utilcode.util.ConvertUtils
+import com.tianfy.convertlibrary.anno.BaseFieldAnnotation
+import com.tianfy.convertlibrary.anno.ConvertArray
 import java.lang.reflect.Field
 import java.lang.reflect.ParameterizedType
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class Bean2Bytes {
-    companion object{
+    companion object {
         private const val TAG = "Bean2Bytes"
     }
+
     /**
      * 将对象转换为字节数组
      * 长度和CRC需要自己计算填充
@@ -21,11 +25,11 @@ class Bean2Bytes {
         val clazz = parserBean::class.java
         try {
             val byteSize = calculateSize(clazz)
-//            Log.d(TAG, "parserBean2Bytes byteSize:$byteSize")
+            Log.d(TAG, "parserBean2Bytes byteSize:$byteSize")
             // 计算完长度后，创建ByteBuffer，然后填充数据
             val byteBuffer = convertBytes(byteSize, clazz, parserBean)
             val bytes = byteBuffer.array()
-//            Log.d(TAG, "parserBean2Bytes convertBytesHex:${ConvertUtils.bytes2HexString(bytes)}")
+            Log.d(TAG, "parserBean2Bytes convertBytesHex:${ConvertUtils.bytes2HexString(bytes)}")
             return bytes
         } catch (e: Exception) {
             throw RuntimeException(e)
@@ -38,7 +42,14 @@ class Bean2Bytes {
         parserBean: Any
     ): ByteBuffer {
         val byteBuffer = ByteBuffer.allocate(byteSize).order(ByteOrder.BIG_ENDIAN)
-        clazz.declaredFields.forEach {
+        val fields = clazz.declaredFields.asList()
+            .filter { it.getAnnotation(BaseFieldAnnotation::class.java) != null }
+            .stream()
+            .sorted(Comparator.comparingInt {
+                it.getAnnotation(BaseFieldAnnotation::class.java)!!.order
+            })
+        fields.forEach {
+            Log.d(TAG, it.name)
             it.isAccessible = true
             when (it.type) {
                 Byte::class.javaPrimitiveType -> {

@@ -1,15 +1,14 @@
-package com.tianfy.parserconvert
+package com.tianfy.convertlibrary
 
-import org.junit.Assert.assertEquals
 import org.junit.Test
 
+import org.junit.Assert.*
 
 /**
  * Example local unit test, which will execute on the development machine (host).
  *
  * See [testing documentation](http://d.android.com/tools/testing).
  */
-@Suppress("UNUSED_EXPRESSION")
 class ExampleUnitTest {
     @Test
     fun addition_isCorrect() {

@@ -1,8 +1,8 @@
-package com.tianfy.parserconvert
+package com.tianfy.convertlibrary.observer
 
-abstract class ParserObserver<T> constructor(val startByte: Byte, val protocolLength: Short) :
+abstract class ParserObserver<T>(val startByte: Byte, val protocolLength: Short) :
     ReceiveObserver {
-    override fun onParseSuccess(data: Any) {
+    override fun onParseSuccess(data: Any?,bytes:ByteArray) {
         onChanged(Result.success(data as T))
     }
 

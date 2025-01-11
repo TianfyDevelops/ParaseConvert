@@ -1,9 +1,12 @@
-package com.tianfy.parserconvert
+package com.tianfy.convertlibrary.core
 
+import com.tianfy.convertlibrary.anno.BaseFieldAnnotation
+import com.tianfy.convertlibrary.anno.ConvertArray
 import java.lang.reflect.Field
 import java.lang.reflect.ParameterizedType
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.Comparator
 import kotlin.experimental.and
 
 class Bytes2Bean {
@@ -31,7 +34,13 @@ class Bytes2Bean {
         byteBuffer: ByteBuffer,
     ): Any {
         val parserBean = clazz.getConstructor().newInstance()
-        clazz.declaredFields.forEach {
+        val fields = clazz.declaredFields.asList()
+            .filter { it.getAnnotation(BaseFieldAnnotation::class.java) != null }
+            .stream()
+            .sorted(Comparator.comparingInt {
+                it.getAnnotation(BaseFieldAnnotation::class.java)!!.order
+            })
+        fields.forEach {
             when (it.type) {
                 Byte::class.javaPrimitiveType -> {
                     val byte = byteBuffer.get() and 0xff.toByte()
