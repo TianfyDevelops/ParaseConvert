@@ -63,6 +63,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
 
     implementation(project(":convertlibrary"))
+    implementation(project(":nettyLib"))
     implementation (libs.com.blankj.utilcodex)
 
 }
