@@ -1,7 +1,14 @@
 package com.tianfy.convertlibrary.observer
 
+import android.os.Looper
+import androidx.annotation.MainThread
 import com.tianfy.convertlibrary.core.ParserConvert
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainCoroutineDispatcher
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.lang.reflect.ParameterizedType
+import java.util.concurrent.ConcurrentHashMap
 
 class ParserObserverManager private constructor() {
     companion object {
@@ -10,13 +17,23 @@ class ParserObserverManager private constructor() {
         }
     }
 
-    private val parserMap = mutableMapOf<String, ParserObserver<*>>()
+    private val parserMap = ConcurrentHashMap<String, ParserObserver<*>>()
     fun <T> addObserver(parserObserver: ParserObserver<T>) {
         parserMap["${parserObserver.startByte.toInt()}-${parserObserver.protocolLength}"] = parserObserver
     }
 
-    fun handle(byteArray: ByteArray) {
+    suspend fun handle(byteArray: ByteArray) {
         val key = "${byteArray[0].toInt()}-${byteArray.size}"
+        if (Thread.currentThread() != Looper.getMainLooper().thread) {
+            withContext(Dispatchers.IO) {
+                parseRawBytes(key, byteArray)
+            }
+        } else {
+            parseRawBytes(key, byteArray)
+        }
+    }
+
+    private fun parseRawBytes(key: String, byteArray: ByteArray) {
         if (parserMap.containsKey(key)) {
             val parserObserver = parserMap[key]!!
             try {
