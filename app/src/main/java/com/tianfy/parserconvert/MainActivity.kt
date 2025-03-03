@@ -14,6 +14,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import java.net.ServerSocket
+import java.nio.Buffer
 
 class MainActivity : AppCompatActivity() {
 
@@ -42,7 +44,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-
         ParserObserverManager.Instance.addObserver(CustomParserObserver())
 
         binding.btnBean2bytes.setOnClickListener {
@@ -56,7 +57,7 @@ class MainActivity : AppCompatActivity() {
                     ParserObserverManager.Instance.handle(it)
                 }
             }
-
         }
+
     }
 }

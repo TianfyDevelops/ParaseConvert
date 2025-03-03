@@ -59,6 +59,9 @@ class NettyServiceManager private constructor() {
 
 
     fun stopService(context: Context) {
-        context.stopService(Intent(context, NettyService::class.java))
+        if (isBound) {
+            isBound = false
+            context.unbindService(serviceConnection)
+        }
     }
 }
