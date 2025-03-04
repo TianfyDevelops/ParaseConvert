@@ -1,14 +1,10 @@
 package com.tianfy.convertlibrary.observer
 
 import android.os.Looper
-import androidx.annotation.MainThread
 import com.tianfy.convertlibrary.core.ParserConvert
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.MainCoroutineDispatcher
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 import java.lang.reflect.ParameterizedType
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 
 class ParserObserverManager private constructor() {
     companion object {
@@ -17,15 +13,21 @@ class ParserObserverManager private constructor() {
         }
     }
 
-    private val parserMap = ConcurrentHashMap<String, ParserObserver<*>>()
+    private val singleThread = Executors.newSingleThreadExecutor()
+    private val parserMap = ConcurrentHashMap<String, MutableList<ParserObserver<*>>>()
     fun <T> addObserver(parserObserver: ParserObserver<T>) {
-        parserMap["${parserObserver.startByte.toInt()}-${parserObserver.protocolLength}"] = parserObserver
+        val parserObservers = parserMap["${parserObserver.startByte.toInt()}-${parserObserver.protocolLength}"]
+        if (parserObservers.isNullOrEmpty()) {
+            parserMap["${parserObserver.startByte.toInt()}-${parserObserver.protocolLength}"] = mutableListOf(parserObserver)
+        } else {
+            parserObservers.add(parserObserver)
+        }
     }
 
-    suspend fun handle(byteArray: ByteArray) {
+    fun handle(byteArray: ByteArray) {
         val key = "${byteArray[0].toInt()}-${byteArray.size}"
         if (Thread.currentThread() != Looper.getMainLooper().thread) {
-            withContext(Dispatchers.IO) {
+            singleThread.execute {
                 parseRawBytes(key, byteArray)
             }
         } else {
@@ -35,19 +37,21 @@ class ParserObserverManager private constructor() {
 
     private fun parseRawBytes(key: String, byteArray: ByteArray) {
         if (parserMap.containsKey(key)) {
-            val parserObserver = parserMap[key]!!
-            try {
-                // passerBean
-                val clazz = parserObserver::class.java
-                val genericSuperclass = clazz.genericSuperclass
-                if (genericSuperclass is ParameterizedType) {
-                    val genericTypeClazz = genericSuperclass.actualTypeArguments[0] as Class<*>
-                    val parserObject = ParserConvert.Instance.parseBytes2Bean(byteArray, genericTypeClazz)
-                    parserObserver.onParseSuccess(parserObject, byteArray)
+            val parserObservers = parserMap[key]!!
+            parserObservers.forEach { parserObserver ->
+                try {
+                    // passerBean
+                    val clazz = parserObserver::class.java
+                    val genericSuperclass = clazz.genericSuperclass
+                    if (genericSuperclass is ParameterizedType) {
+                        val genericTypeClazz = genericSuperclass.actualTypeArguments[0] as Class<*>
+                        val parserObject = ParserConvert.Instance.parseBytes2Bean(byteArray, genericTypeClazz)
+                        parserObserver.onParseSuccess(parserObject, byteArray)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    parserObserver.onParseError(e)
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                parserObserver.onParseError(e)
             }
         }
     }
