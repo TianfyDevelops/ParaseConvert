@@ -1,53 +1,60 @@
 package com.tianfy.nettylib
 
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.Message
 import android.os.RemoteCallbackList
-import androidx.core.util.rangeTo
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.channel.socket.DatagramPacket
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.util.concurrent.ArrayBlockingQueue
 
 class NettyLocalChannelHandler(private val remoteCallbackList: RemoteCallbackList<INettyServiceCallback>) :
-    SimpleChannelInboundHandler<DatagramPacket>() {
+    SimpleChannelInboundHandler<DatagramPacket>(), Handler.Callback {
+    private var handlerThread: HandlerThread? = null
+    private var handler: Handler? = null
 
-    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private val blockingQueue = ArrayBlockingQueue<ByteArray>(10, true)
-
-    init {
-        coroutineScope.launch {
-            withContext(Dispatchers.IO) {
-                while (isActive) {
-                    delay(100L)
-                    val bytes = blockingQueue.take()
-                    try {
-                        remoteCallbackList.beginBroadcast()
-                        val registeredCallbackCount = remoteCallbackList.registeredCallbackCount
-                        for (i in 0..<registeredCallbackCount) {
-                            val broadcastItem = remoteCallbackList.getBroadcastItem(i)
-                            broadcastItem.receiveBytes(bytes)
-                        }
-                    } finally {
-                        remoteCallbackList.finishBroadcast()
-                    }
-                }
-            }
+    override fun channelActive(ctx: ChannelHandlerContext?) {
+        super.channelActive(ctx)
+        handlerThread = HandlerThread("NettyLocalChannelHandlerThread").apply {
+            start()
         }
+        handler = handlerThread?.looper?.let { Handler(it) }
     }
 
     override fun channelRead0(ctx: ChannelHandlerContext?, msg: DatagramPacket?) {
         msg?.let {
+            val sender = it.sender()
+            val port = sender.port
+            val hostString = sender.hostString
             val byteBuf = it.content()
             val array = byteBuf.array()
-            if (!blockingQueue.offer(array)) {
-                blockingQueue.poll()
+            val message = Message.obtain().apply {
+                obj = NettyReceive(array, hostString, port)
             }
+            handler?.sendMessage(message)
         }
+    }
+
+    override fun handleMessage(msg: Message): Boolean {
+        val nettyReceive = msg.obj as NettyReceive
+        try {
+            remoteCallbackList.beginBroadcast()
+            val registeredCallbackCount = remoteCallbackList.registeredCallbackCount
+            for (i in 0..<registeredCallbackCount) {
+                val broadcastItem = remoteCallbackList.getBroadcastItem(i)
+                broadcastItem.receiveBytes(nettyReceive.bytes, nettyReceive.ip, nettyReceive.port)
+            }
+        } finally {
+            remoteCallbackList.finishBroadcast()
+        }
+        return true
+    }
+
+    override fun channelInactive(ctx: ChannelHandlerContext?) {
+        super.channelInactive(ctx)
+        handlerThread?.quitSafely()
+        handler?.removeCallbacksAndMessages(null)
+        handlerThread = null
+        handler = null
     }
 }
