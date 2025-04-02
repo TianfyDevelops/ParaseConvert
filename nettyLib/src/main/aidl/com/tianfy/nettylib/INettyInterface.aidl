@@ -8,4 +8,6 @@ interface INettyInterface {
     void addCallback(in INettyServiceCallback callback);
 
     void removeCallback(in INettyServiceCallback callback);
+
+    oneway void writeBytes(in byte[] bytes,in String ip,in int port);
 }
